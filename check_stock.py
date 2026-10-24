@@ -14,6 +14,7 @@ import sys
 import time
 import urllib.parse
 import urllib.request
+import http.cookiejar
 
 # Part numbers from a third-party reseller listing (SHI), NOT verified against Apple.
 PARTS = {
@@ -63,12 +64,24 @@ def fetch():
     for i, part in enumerate(PARTS):
         params[f"parts.{i}"] = part
     url = "https://www.apple.com/shop/fulfillment-messages?" + urllib.parse.urlencode(params)
+    # Visit the product page first, like a browser, to pick up Apple's session cookies.
+    opener = urllib.request.build_opener(
+        urllib.request.HTTPCookieProcessor(http.cookiejar.CookieJar()))
+    base_headers = {"User-Agent": UA, "Accept-Language": "en-US,en;q=0.9"}
+    page = urllib.request.Request(BUY_URL + "/7.6-inch-display-256gb-night-sky-unlocked",
+                                  headers={**base_headers, "Accept": "text/html"})
+    try:
+        with opener.open(page, timeout=30) as r:
+            r.read()
+    except Exception as e:  # noqa: BLE001
+        print("warm-up page request failed:", e)
     req = urllib.request.Request(url, headers={
-        "User-Agent": UA,
+        **base_headers,
         "Accept": "application/json, text/plain, */*",
         "Referer": BUY_URL,
+        "X-Requested-With": "XMLHttpRequest",
     })
-    with urllib.request.urlopen(req, timeout=30) as r:
+    with opener.open(req, timeout=30) as r:
         raw = r.read().decode("utf-8", "replace")
         status = r.status
     try:
@@ -103,7 +116,9 @@ def main():
                    priority="default")
             state["last_fail_alert"] = now
         save_state(state)
-        sys.exit(1)
+        # Exit 0 on purpose: a failed run would make GitHub e-mail you every 5 minutes.
+        # The ntfy alert (max once an hour) and the annotation report the failure instead.
+        sys.exit(0)
 
     found = []
     print(f"{len(stores)} stores returned")
