@@ -95,6 +95,8 @@ def main():
         stores = fetch()
     except Exception as e:  # noqa: BLE001 - any failure must be reported, not hidden
         print("CHECK FAILED:", e)
+        # Surface the reason as a GitHub annotation (visible on the run summary page).
+        print(f"::error title=Apple check failed::{str(e)[:500]}")
         now = time.time()
         if now - state.get("last_fail_alert", 0) >= FAIL_ALERT_EVERY:
             notify("Duo check FAILED", f"Could not read Apple stock (not 'no stock'): {e}"[:400],
